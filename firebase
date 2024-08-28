@@ -1,0 +1,127 @@
+#include "DFPlayerMini_Fast.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+#include <SPI.h>
+#include <WiFi.h>
+#include <FirebaseESP32.h>
+
+// TFT display pins
+#define TFT_CS     15
+#define TFT_RST    4
+#define TFT_DC     2
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+DFPlayerMini_Fast myDFPlayer;
+
+int sensorPin = 34; // Pin sensor yang terhubung ke ESP32
+int sensorValue;    // Variabel untuk menyimpan nilai sensor
+bool isMale = true; // True jika pria, False jika wanita
+byte glukosa;
+byte uricAcid;
+byte kolestrol;
+
+// Konfigurasi WiFi
+const char* ssid = "YOUR_SSID"; // Ganti dengan SSID WiFi Anda
+const char* password = "YOUR_PASSWORD"; // Ganti dengan password WiFi Anda
+
+// Konfigurasi Firebase
+#define FIREBASE_HOST "YOUR_FIREBASE_PROJECT.firebaseio.com" // Ganti dengan URL database Firebase Anda
+#define FIREBASE_AUTH "YOUR_DATABASE_SECRET" // Ganti dengan Secret Key Firebase Anda
+FirebaseData firebaseData;
+
+void setup() {
+  Serial.begin(9600);
+  myDFPlayer.begin(Serial);
+
+  pinMode(sensorPin, INPUT); // Set pin sensor sebagai input
+
+  // Initialize the TFT display
+  tft.begin();
+  tft.setRotation(1);
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextSize(2);
+  tft.setTextColor(ILI9341_WHITE);
+
+  // Hubungkan ke WiFi
+  WiFi.begin(ssid, password);
+  tft.setCursor(10, 30);
+  tft.println("Connecting to WiFi...");
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+    tft.setCursor(10, 70);
+    tft.println("...");
+  }
+  
+  Serial.println("Connected to WiFi");
+  tft.setCursor(10, 70);
+  tft.println("Connected!");
+
+  // Inisialisasi Firebase
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  Firebase.reconnectWiFi(true);
+}
+
+void loop() {
+  sensorValue = analogRead(sensorPin); // Baca nilai dari sensor
+
+  // Menghitung tegangan dari nilai ADC
+  float voltage = sensorValue * (3.3 / 4095);
+
+  // Menghitung kadar glukosa darah, kolesterol, dan asam urat dalam mg/dl
+  glukosa = (((-64.641 * voltage) + 300.17) - 22);
+  uricAcid = (((-64.641 * voltage) + 300.17) - 22);
+  kolestrol = (((-64.641 * voltage) + 300.17) - 22);
+
+  // Menentukan nilai parameter untuk berbagai kondisi
+  byte bloodGlucoseFasting = glukosa; // Nilai sensor untuk gula darah puasa
+  byte bloodGlucosePostMeal = glukosa; // Nilai sensor untuk gula darah 2 jam setelah makan
+  byte randomBloodGlucose = glukosa; // Nilai sensor untuk gula darah acak
+  byte cholesterol = kolestrol; // Nilai sensor untuk kolesterol
+  byte uricAcidValue = uricAcid; // Nilai sensor untuk asam urat
+
+  // Tampilkan nilai di Serial Monitor
+  Serial.print("Gula Darah Puasa: "); Serial.println(bloodGlucoseFasting);
+  Serial.print("Gula Darah 2 Jam Setelah Makan: "); Serial.println(bloodGlucosePostMeal);
+  Serial.print("Gula Darah Acak: "); Serial.println(randomBloodGlucose);
+  Serial.print("Kolesterol: "); Serial.println(cholesterol);
+  Serial.print("Asam Urat: "); Serial.println(uricAcidValue);
+  
+  // Tampilkan nilai di TFT Display
+  tft.fillScreen(ILI9341_BLACK);
+  
+  tft.setCursor(10, 30);
+  tft.print("Glucose Fasting: ");
+  tft.println(bloodGlucoseFasting);
+
+  tft.setCursor(10, 70);
+  tft.print("Glucose Post-Meal: ");
+  tft.println(bloodGlucosePostMeal);
+
+  tft.setCursor(10, 110);
+  tft.print("Random Glucose: ");
+  tft.println(randomBloodGlucose);
+
+  tft.setCursor(10, 150);
+  tft.print("Cholesterol: ");
+  tft.println(cholesterol);
+
+  tft.setCursor(10, 190);
+  tft.print("Uric Acid: ");
+  tft.println(uricAcidValue);
+
+  // Kirim data ke Firebase
+  if (Firebase.ready()) {
+    Firebase.setInt(firebaseData, "/Data/GulaDarahPuasa", bloodGlucoseFasting);
+    Firebase.setInt(firebaseData, "/Data/GulaDarahPostMeal", bloodGlucosePostMeal);
+    Firebase.setInt(firebaseData, "/Data/GulaDarahAcak", randomBloodGlucose);
+    Firebase.setInt(firebaseData, "/Data/Kolesterol", cholesterol);
+    Firebase.setInt(firebaseData, "/Data/AsamUrat", uricAcidValue);
+    Serial.println("Data terkirim ke Firebase.");
+  } else {
+    Serial.println("Gagal mengirim data ke Firebase.");
+  }
+
+  delay(1000); // Tunda sejenak sebelum membaca ulang
+}
