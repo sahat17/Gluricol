@@ -1,0 +1,129 @@
+#include "DFPlayerMini_Fast.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
+#include <SPI.h>
+
+DFPlayerMini_Fast myDFPlayer;
+
+// TFT display pins
+#define TFT_CS     15
+#define TFT_RST    4
+#define TFT_DC     2
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+int sensorPin = 34; // Pin sensor yang terhubung ke ESP32
+int sensorValue;    // Variabel untuk menyimpan nilai sensor
+bool isMale = true; // True jika pria, False jika wanita
+byte glukosa;
+byte uricAcid;
+byte kolestrol;
+
+void setup() {
+  Serial.begin(9600);
+  myDFPlayer.begin(Serial);
+
+  pinMode(sensorPin, INPUT); // Set pin sensor sebagai input
+
+  // Initialize the TFT display
+  tft.begin();
+  tft.setRotation(1);
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setTextSize(2);
+  tft.setTextColor(ILI9341_WHITE);
+}
+
+void loop() {
+  sensorValue = analogRead(sensorPin); // Baca nilai dari sensor
+
+  // Menghitung tegangan dari nilai ADC
+  float voltage = sensorValue * (3.3 / 4095);
+
+  // Menghitung kadar glukosa darah, kolesterol, dan asam urat dalam mg/dl
+  glukosa = (((-64.641 * voltage) + 300.17) - 22);
+  uricAcid = (((-64.641 * voltage) + 300.17) - 22);
+  kolestrol = (((-64.641 * voltage) + 300.17) - 22);
+
+  // Menentukan nilai parameter untuk berbagai kondisi
+  byte bloodGlucoseFasting = glukosa; // Nilai sensor untuk gula darah puasa
+  byte bloodGlucosePostMeal = glukosa; // Nilai sensor untuk gula darah 2 jam setelah makan
+  byte randomBloodGlucose = glukosa; // Nilai sensor untuk gula darah acak
+  byte cholesterol = kolestrol; // Nilai sensor untuk kolesterol
+  byte uricAcidValue = uricAcid; // Nilai sensor untuk asam urat
+
+  // Tampilkan nilai di Serial Monitor
+  Serial.print("Gula Darah Puasa: "); Serial.println(bloodGlucoseFasting);
+  Serial.print("Gula Darah 2 Jam Setelah Makan: "); Serial.println(bloodGlucosePostMeal);
+  Serial.print("Gula Darah Acak: "); Serial.println(randomBloodGlucose);
+  Serial.print("Kolesterol: "); Serial.println(cholesterol);
+  Serial.print("Asam Urat: "); Serial.println(uricAcidValue);
+  
+  // Tampilkan nilai di TFT Display
+  tft.fillScreen(ILI9341_BLACK);
+  
+  tft.setCursor(10, 30);
+  tft.print("Glucose Fasting: ");
+  tft.println(bloodGlucoseFasting);
+
+  tft.setCursor(10, 70);
+  tft.print("Glucose Post-Meal: ");
+  tft.println(bloodGlucosePostMeal);
+
+  tft.setCursor(10, 110);
+  tft.print("Random Glucose: ");
+  tft.println(randomBloodGlucose);
+
+  tft.setCursor(10, 150);
+  tft.print("Cholesterol: ");
+  tft.println(cholesterol);
+
+  tft.setCursor(10, 190);
+  tft.print("Uric Acid: ");
+  tft.println(uricAcidValue);
+
+  // Cek Gula Darah Puasa
+  if (bloodGlucoseFasting >= 70 && bloodGlucoseFasting <= 99) {
+    myDFPlayer.play(1); // Mainkan file untuk Gula Darah Puasa Normal
+  } else if (bloodGlucoseFasting >= 100 && bloodGlucoseFasting <= 125) {
+    myDFPlayer.play(2); // Mainkan file untuk Gula Darah Puasa Pra-diabetes
+  } else if (bloodGlucoseFasting >= 126) {
+    myDFPlayer.play(3); // Mainkan file untuk Gula Darah Puasa Diabetes
+  }
+
+  // Cek Gula Darah 2 Jam Setelah Makan
+  if (bloodGlucosePostMeal < 140) {
+    myDFPlayer.play(4); // Mainkan file untuk Gula Darah 2 Jam Setelah Makan Normal
+  } else if (bloodGlucosePostMeal >= 140 && bloodGlucosePostMeal <= 199) {
+    myDFPlayer.play(5); // Mainkan file untuk Gula Darah 2 Jam Setelah Makan Pra-diabetes
+  } else if (bloodGlucosePostMeal >= 200) {
+    myDFPlayer.play(6); // Mainkan file untuk Gula Darah 2 Jam Setelah Makan Diabetes
+  }
+
+  // Cek Gula Darah Acak
+  if (randomBloodGlucose < 140) {
+    myDFPlayer.play(7); // Mainkan file untuk Gula Darah Acak Normal
+  } else if (randomBloodGlucose >= 200) {
+    myDFPlayer.play(8); // Mainkan file untuk Gula Darah Acak Diabetes
+  }
+
+  // Cek Kolesterol
+  if (cholesterol < 200) {
+    myDFPlayer.play(9); // Mainkan file untuk Kolesterol Normal
+  } else if (cholesterol >= 200 && cholesterol <= 239) {
+    myDFPlayer.play(10); // Mainkan file untuk Kolesterol Batas Tinggi
+  } else if (cholesterol >= 240) {
+    myDFPlayer.play(11); // Mainkan file untuk Kolesterol Tinggi
+  }
+
+  // Cek Asam Urat (berdasarkan jenis kelamin)
+  if (isMale) {
+    if (uricAcidValue >= 3.4 && uricAcidValue <= 7.0) {
+      myDFPlayer.play(12); // Mainkan file untuk Asam Urat Normal pada Pria
+    }
+  } else {
+    if (uricAcidValue >= 2.4 && uricAcidValue <= 6.0) {
+      myDFPlayer.play(13); // Mainkan file untuk Asam Urat Normal pada Wanita
+    }
+  }
+  
+  delay(1000); // Tunda sejenak sebelum membaca ulang
+}
